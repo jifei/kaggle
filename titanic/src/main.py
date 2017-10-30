@@ -256,6 +256,6 @@ print test_x.shape
 test_y = clf.predict(test_x)
 df_test['Survived'] = test_y
 df_test[['PassengerId', 'Survived']] \
-    .to_csv('../input/submit.csv', index=False)
+    .to_csv('../input/submit.csv', index=False).astype(int)
 
 

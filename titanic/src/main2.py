@@ -52,6 +52,7 @@ def clean_data(df, drop_passenger_id):
     # Parch (number of parents or children on board) and
     # SibSp (number of siblings or spouses):
     df['FamilySize'] = df['SibSp'] + df['Parch']
+    # df['NameLength'] = df['Name'].apply(lambda x:len(x))
 
     # Drop the columns we won't use:
     df = df.drop(['Name', 'Sex', 'Ticket', 'Cabin', 'Embarked'], axis=1)
@@ -93,9 +94,9 @@ test_data = df_test.values
 # Get the test data features, skipping the first column 'PassengerId'
 test_x = test_data[:, 1:]
 # print test_x.shape
-
+test_x1 = test_x
 # Predict the Survival values for the test data
-test_y = clf.predict(test_x)
+test_y = clf.predict(test_x).astype(int)
 
 # 预测概率
 # test_y = clf.predict_log_proba(test_x)
@@ -113,7 +114,7 @@ from sklearn.model_selection import train_test_split
 # clf = svm.SVC()
 #逻辑回归
 # clf = LogisticRegression()
-clf = GradientBoostingClassifier(random_state=100)
+# clf = GradientBoostingClassifier(random_state=100)
 # Split 80-20 train vs test data
 train_x, test_x, train_y, test_y = train_test_split(train_features,
                                                     train_target,
@@ -124,6 +125,16 @@ train_x, test_x, train_y, test_y = train_test_split(train_features,
 # print (test_x.shape, test_y.shape)
 clf = clf.fit(train_x, train_y)
 predict_y = clf.predict(test_x)
+
+test_y2 = clf.predict(test_x1).astype(int)
+
+# 预测概率
+# test_y = clf.predict_log_proba(test_x)
+# test_y = clf.predict_proba(test_x)
+df_test['Survived'] = test_y2
+df_test[['PassengerId', 'Survived']] \
+    .to_csv('../input/submit2.csv', index=False)
+
 
 # 衡量指标
 from sklearn.metrics import accuracy_score

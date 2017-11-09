@@ -12,6 +12,11 @@ fizsize_with_subplots = (10, 10)
 bin_size = 10
 
 df_train = pd.read_csv("../input/train.csv")
+df_train['Fare_Range']=pd.qcut(df_train['Fare'],4)
+d = df_train.groupby(['Fare_Range'])['Survived'].mean().to_frame().style.background_gradient(cmap='summer_r')
+print df_train.groupby(['Fare_Range'])['Survived'].mean()
+plt.show()
+exit()
 # 特征工程
 print df_train.describe()
 print df_train.head(10)
@@ -256,6 +261,6 @@ print test_x.shape
 test_y = clf.predict(test_x)
 df_test['Survived'] = test_y
 df_test[['PassengerId', 'Survived']] \
-    .to_csv('../input/submit.csv', index=False).astype(int)
+    .to_csv('../output/submit.csv', index=False).astype(int)
 
 

@@ -3,6 +3,9 @@ import numpy as np
 import pandas as pd
 from keras.models import Sequential
 from keras.optimizers import SGD, RMSprop, Adam
+from sklearn.model_selection import GridSearchCV
+from keras.wrappers.scikit_learn import KerasClassifier
+
 from keras.layers import Dense, Activation, Dropout
 
 raw_train = pd.read_csv('../input/train.csv', index_col=0)
@@ -10,6 +13,7 @@ raw_train['is_test'] = 0
 raw_test = pd.read_csv('../input/test.csv', index_col=0)
 raw_test['is_test'] = 1
 all_data = pd.concat((raw_train, raw_test), axis=0)
+from sklearn.model_selection import GridSearchCV
 
 
 def get_title_last_name(name):
@@ -51,6 +55,7 @@ def process_data(df):
 
     return (df)
 
+
 def clean_data(df, drop_passenger_id):
     # Get the unique values of Sex
     sexes = sorted(df['Sex'].unique())
@@ -83,7 +88,7 @@ def clean_data(df, drop_passenger_id):
     # df['NameLength'] = df['Name'].apply(lambda x:len(x))
 
     # Drop the columns we won't use:
-    df['Sex']=df['Sex_Val']
+    df['Sex'] = df['Sex_Val']
     df = df.drop(['Sex_Val'], axis=1)
 
     # Drop the Age column since we will be using the AgeFill column instead.
@@ -96,10 +101,15 @@ def clean_data(df, drop_passenger_id):
 
     return df
 
-# print all_data.head(10)
-# print clean_data(all_data,drop_passenger_id=False).head(10)
-# exit()
-proc_data = process_data(clean_data(all_data,drop_passenger_id=False))
+d= process_data(all_data)
+
+print d.head(10)
+exit()
+proc_data = process_data(clean_data(all_data, drop_passenger_id=False))
+# print proc_data.head(10)
+
+
+
 proc_train = proc_data[proc_data['is_test'] == 0]
 proc_test = proc_data[proc_data['is_test'] == 1]
 # print proc_test.loc[proc_test['Age'].isnull()]['Age'].head(10)
@@ -133,9 +143,8 @@ y_train_age = for_age_train['Age']
 
 train_data = proc_train
 
-
 to_pred = train_data.loc[train_data['Age'].isnull()].drop(
-          ['Age', 'Survived', 'is_test'], axis=1)
+    ['Age', 'Survived', 'is_test'], axis=1)
 # p = tmodel.predict(to_pred.values)
 # print train_data['Age'].dtype.name
 # print train_data.loc[train_data['Age'].isnull()].head(10)
@@ -156,26 +165,46 @@ test_data = proc_test
 y = pd.get_dummies(train_data['Survived'])
 X = train_data.drop(['Survived', 'is_test'], axis=1)
 
-
 # create model
-model = Sequential()
-model.add(Dense(input_dim=X.shape[1], units=128,
-                 kernel_initializer='normal', bias_initializer='zeros'))
-model.add(Activation('relu'))
 
-for i in range(0, 15):
-    model.add(Dense(units=128, kernel_initializer='normal',
-                     bias_initializer='zeros'))
+
+batch_size = [20, 50, 80]
+epochs = [100, 200, 500]
+param_grid = dict(batch_size=batch_size, nb_epoch=epochs)
+
+def create_model():
+    model = Sequential()
+    model.add(Dense(input_dim=X.shape[1], units=128,
+                    kernel_initializer='normal', bias_initializer='zeros'))
     model.add(Activation('relu'))
-    model.add(Dropout(.2))
 
-model.add(Dense(units=2))
-model.add(Activation('softmax'))
+    for i in range(0, 15):
+        model.add(Dense(units=128, kernel_initializer='normal',
+                        bias_initializer='zeros'))
+        model.add(Activation('relu'))
+        model.add(Dropout(.2))
 
-model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.add(Dense(units=1))
+    model.add(Activation('sigmoid'))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+
+
+k_model = KerasClassifier(build_fn=create_model, verbose=0)
+grid_search = GridSearchCV(estimator=k_model, param_grid=param_grid,
+                           # cv=StratifiedKFold(Y_train, n_folds=10, shuffle=True, random_state=1234),
+                           scoring="accuracy", verbose=100)
+print train_data['Survived'].shape
+# print X.shape
+# print y.values
+# exit(0)
+grid_search.fit(X.values, train_data['Survived'].values, verbose=2)
+print grid_search.grid_scores_
+print grid_search.best_params_
+print grid_search.best_score_
+exit()
 
 model.fit(X.values, y.values, epochs=600, verbose=2)
-
 
 p_survived = model.predict_classes(test_data.drop(['Survived', 'is_test'], axis=1).values)
 submission = pd.DataFrame()

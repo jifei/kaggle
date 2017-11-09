@@ -4,6 +4,8 @@ import pandas as pd
 from keras.models import Sequential
 from keras.optimizers import SGD, RMSprop, Adam
 from keras.layers import Dense, Activation, Dropout
+from sklearn.model_selection import GridSearchCV
+from keras.wrappers.scikit_learn import KerasClassifier
 
 raw_train = pd.read_csv('../input/train.csv', index_col=0)
 raw_train['is_test'] = 0
@@ -92,43 +94,15 @@ p = tmodel.predict(to_pred.values)
 # print train_data.loc[train_data['Age'].isnull()].head(10)
 # print p
 
-def age_map(age):
-    result = 9
-    if (age < 10):
-        result = 0
-    elif (age < 20):
-        result = 1
-    elif (age < 30):
-        result = 2
-    elif (age < 40):
-        result = 3
-    elif (age < 50):
-        result = 4
-    elif (age < 60):
-        result = 5
-    elif (age < 70):
-        result = 6
-    elif (age < 80):
-        result = 7
-    elif (age < 90):
-        result = 8
-    return result
 train_data.loc[train_data['Age'].isnull(),'Age'] = p
-train_data['Age']=train_data['Age'].apply(lambda x:age_map(x))
 
-train_data = pd.get_dummies(train_data, columns=['Age'])
 
-# print train_data.head(10)
-# exit()
 
 test_data = proc_test
 to_pred = test_data.loc[test_data['Age'].isnull()].drop(
           ['Age', 'Survived', 'is_test'], axis=1)
 p = tmodel.predict(to_pred.values)
 test_data.loc[test_data['Age'].isnull(),'Age'] = p
-test_data['Age']=test_data['Age'].apply(lambda x:age_map(x))
-test_data = pd.get_dummies(test_data, columns=['Age'])
-
 # print train_data.loc[train_data['Age'].isnull()]
 # print train_data['Age']
 
@@ -138,23 +112,44 @@ y = pd.get_dummies(train_data['Survived'])
 X = train_data.drop(['Survived', 'is_test'], axis=1)
 
 
-# create model
-model = Sequential()
-model.add(Dense(input_dim=X.shape[1], units=128,
-                 kernel_initializer='normal', bias_initializer='zeros'))
-model.add(Activation('relu'))
+batch_size = [10,20]
+epochs = [100,200,500,600]
+param_grid = dict(batch_size=batch_size, nb_epoch=epochs)
 
-for i in range(0, 15):
-    model.add(Dense(units=128, kernel_initializer='normal',
-                     bias_initializer='zeros'))
+def create_model():
+    model = Sequential()
+    model.add(Dense(input_dim=X.shape[1], units=128,
+                    kernel_initializer='normal', bias_initializer='zeros'))
+    # model.add(Activation('tanh'))
     model.add(Activation('relu'))
-    model.add(Dropout(.2))
+    # model.add(Dropout(.1))
 
-model.add(Dense(units=2))
-model.add(Activation('softmax'))
+    # for i in range(0, 8):
+    #     model.add(Dense(units=128, kernel_initializer='normal',
+    #                     bias_initializer='zeros'))
+    #     model.add(Activation('relu'))
+    #     model.add(Dropout(.2))
+    model.add(Dense(units=1))
+    model.add(Activation('sigmoid'))
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
 
-model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
+k_model = KerasClassifier(build_fn=create_model, verbose=2)
+grid_search = GridSearchCV(estimator=k_model, param_grid=param_grid,
+                           # cv=StratifiedKFold(Y_train, n_folds=10, shuffle=True, random_state=1234),
+                           scoring="accuracy", verbose=100)
+print train_data['Survived'].shape
+# print X.shape
+# print y.values
+# exit(0)
+grid_search.fit(X.values, train_data['Survived'].values, verbose=2)
+print grid_search.grid_scores_
+print grid_search.best_params_
+print grid_search.best_score_
+exit()
+
+model = create_model()
 model.fit(X.values, y.values, epochs=600, verbose=2)
 
 
@@ -162,4 +157,4 @@ p_survived = model.predict_classes(test_data.drop(['Survived', 'is_test'], axis=
 submission = pd.DataFrame()
 submission['PassengerId'] = test_data.index
 submission['Survived'] = p_survived
-submission.to_csv('../output/titanic_keras_cs.csv', index=False)
+submission.to_csv('../input/titanic_keras_cs.csv', index=False)

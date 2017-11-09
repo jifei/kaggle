@@ -6,7 +6,7 @@ df_train = pd.read_csv("../input/train.csv")
 
 
 def age_map(age):
-    result = 9
+    result = 8
     if (age < 10):
         result = 0
     elif (age < 20):
@@ -21,12 +21,37 @@ def age_map(age):
         result = 5
     elif (age < 70):
         result = 6
-    elif (age < 80):
-        result = 7
     elif (age < 90):
-        result = 8
+        result = 7
+
     return result
 
+
+def get_dummy_cats(df):
+    return (pd.get_dummies(df, columns=['Pclass', 'Sex_Val',
+                                        'AgeFill', 'FamilySize', 'Fare_cat']))
+
+
+def get_title_last_name(name):
+    full_name = name.str.split(', ', n=0, expand=True)
+    last_name = full_name[0]
+    titles = full_name[1].str.split('.', n=0, expand=True)
+    titles = titles[0]
+    return (titles)
+
+
+def get_titles_from_names(df):
+    df['Title'] = df.Name.str.extract('([A-Za-z]+)\.', expand=False)
+    df['Title'] = df['Title'].replace(
+        ['Lady', 'Countess', 'Col', 'Don', 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer', 'Dona'], 'Rare')
+    df['Title'] = df['Title'].replace('Mlle', 'Miss')
+    df['Title'] = df['Title'].replace('Ms', 'Miss')
+    df['Title'] = df['Title'].replace('Mme', 'Mrs')
+    title_map = {'Mr': 1, 'Miss': 2, 'Mrs': 3, 'Master': 4, 'Rare': 5}
+    df['Title'] = df['Title'].map(title_map)
+    df['Title'] = df['Title'].fillna(0)
+    # df['Title'] = get_title_last_name(df['Name'])
+    return (df)
 
 
 def clean_data(df, drop_passenger_id):
@@ -39,7 +64,7 @@ def clean_data(df, drop_passenger_id):
     # Transform Sex from a string to a number representation
     df['Sex_Val'] = df['Sex'].map(genders_mapping).astype(int)
     df["Embarked"] = df["Embarked"].fillna("S")
-
+    df = get_titles_from_names(df)
     # Get the unique values of Embarked
     embarked_locs = sorted(df['Embarked'].unique())
 
@@ -85,28 +110,36 @@ def clean_data(df, drop_passenger_id):
 
     # Drop the columns we won't use:
     df = df.drop(['Name', 'Sex', 'Ticket', 'Cabin', 'Embarked'], axis=1)
-
+    df['Fare_cat'] = 0
+    df.loc[df['Fare'] <= 7.91, 'Fare_cat'] = 0
+    df.loc[(df['Fare'] > 7.91) & (df['Fare'] <= 14.454), 'Fare_cat'] = 1
+    df.loc[(df['Fare'] > 14.454) & (df['Fare'] <= 31), 'Fare_cat'] = 2
+    df.loc[(df['Fare'] > 31) & (df['Fare'] <= 513), 'Fare_cat'] = 3
     # Drop the Age column since we will be using the AgeFill column instead.
     # Drop the SibSp and Parch columns since we will be using FamilySize.
     # Drop the PassengerId column since it won't be used as a feature.
-    df = df.drop(['Age', 'SibSp', 'Parch'], axis=1)
+    df = df.drop(['Age', 'SibSp', 'Parch', 'Fare'], axis=1)
 
     if drop_passenger_id:
         df = df.drop(['PassengerId'], axis=1)
 
-    return df
+    return get_dummy_cats(df)
 
 
 from sklearn.ensemble import RandomForestClassifier
 
-clf = RandomForestClassifier(max_features='log2', min_samples_split=3, n_estimators=300, min_samples_leaf=2,verbose=0)
+clf = RandomForestClassifier(max_features='log2', min_samples_leaf=1,min_samples_split=2,criterion='entropy', n_estimators=250, max_depth=6, verbose=0)
+clf2 = RandomForestClassifier()
 # train_target=df_train['Survived'].values
 
 df_train = clean_data(df_train, drop_passenger_id=False)
+# print df_train.head(10)
+# exit()
 train_data = df_train.values
 # print df_train.head(10)
 # Training data features, skip the first column 'Survived'
 train_features = train_data[:, 2:]  # Fit the model to our training data
+# print df_train.head(10)
 # 'Survived' column values
 train_target = train_data[:, 1]
 # print train_features.shape
@@ -130,15 +163,16 @@ test_y = clf.predict(test_x).astype(int)
 # 预测概率
 # test_y = clf.predict_log_proba(test_x)
 # test_y = clf.predict_proba(test_x)
-df_test['Survived'] = test_y
-df_test[['PassengerId', 'Survived']] \
-    .to_csv('../input/submit2.csv', index=False)
+# df_test['Survived'] = test_y
+# df_test[['PassengerId', 'Survived']] \
+#     .to_csv('../input/submit2.csv', index=False)
 
 from sklearn import metrics
 from sklearn import svm
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model.logistic import LogisticRegression
 from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold
 
 # 支持向量机
 # clf = svm.SVC()
@@ -151,32 +185,29 @@ train_x, test_x, train_y, test_y = train_test_split(train_features,
                                                     test_size=0.20,
                                                     random_state=0)
 
+cross_validation = StratifiedKFold(n_splits=5, random_state=0, shuffle=False)
+
 param_grid = {
-    'max_depth': [5, 6,7,8],
-    'n_estimators': [100, 200, 250],
+    'n_estimators': [200, 250, 300, 400],
+    'min_samples_split': [2, 3, 4],
     'criterion': ['gini', 'entropy'],
-    # 'min_samples_split': [2, 3, 4],
-    'max_features': ['auto', 'log2', 'sqrt'],
-    # 'min_samples_leaf': [1, 2, 3, 4, 5],
+    'max_features': ['log2', 'sqrt'],
+    'min_samples_leaf': [1,2, 3, 4],
+    'max_depth': [6, 7, 8, 9]
 }
 
-gsearch = GridSearchCV(estimator=clf, param_grid=param_grid, cv=5)
-gsearch.fit(train_features, train_target)
-print gsearch.grid_scores_
-print gsearch.best_params_
-print gsearch.best_score_
-exit()
+# gsearch = GridSearchCV(estimator=clf2, param_grid=param_grid, cv=cross_validation)
+# gsearch.fit(train_features, train_target)
+# print gsearch.grid_scores_
+# print gsearch.best_params_
+# print gsearch.best_score_
+# exit()
 #
 # print (train_features.shape, train_target.shape)
 # print (train_x.shape, train_y.shape)
 # print (test_x.shape, test_y.shape)
-clf = clf.fit(train_x, train_y)
+# clf = clf.fit(train_x, train_y)
 predict_y = clf.predict(test_x)
-features = pd.DataFrame()
-print df_train.columns
-
-features['importance'] = clf.feature_importances_
-print(features)
 
 test_y2 = clf.predict(test_x1).astype(int)
 

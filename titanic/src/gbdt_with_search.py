@@ -107,6 +107,7 @@ train_data = df_train.values
 # print df_train.head(10)
 # Training data features, skip the first column 'Survived'
 train_features = train_data[:, 2:]  # Fit the model to our training data
+# print df_train.head(10)
 # 'Survived' column values
 train_target = train_data[:, 1]
 # print train_features.shape
@@ -144,7 +145,7 @@ from sklearn.model_selection import train_test_split
 # clf = svm.SVC()
 # 逻辑回归
 # clf = LogisticRegression()
-# clf = GradientBoostingClassifier(random_state=100)
+clf = GradientBoostingClassifier()
 # Split 80-20 train vs test data
 train_x, test_x, train_y, test_y = train_test_split(train_features,
                                                     train_target,
@@ -152,12 +153,11 @@ train_x, test_x, train_y, test_y = train_test_split(train_features,
                                                     random_state=0)
 
 param_grid = {
-    'max_depth': [5, 6,7,8],
-    'n_estimators': [100, 200, 250],
-    'criterion': ['gini', 'entropy'],
-    # 'min_samples_split': [2, 3, 4],
-    'max_features': ['auto', 'log2', 'sqrt'],
-    # 'min_samples_leaf': [1, 2, 3, 4, 5],
+    'random_state':[5,8,10,15],
+    'max_depth': range(3, 14, 2),
+    'min_samples_split': range(2, 10, 2),
+    'n_estimators': [50,100, 200, 400],
+    'max_features':  range(10, 50, 10)
 }
 
 gsearch = GridSearchCV(estimator=clf, param_grid=param_grid, cv=5)
@@ -172,11 +172,6 @@ exit()
 # print (test_x.shape, test_y.shape)
 clf = clf.fit(train_x, train_y)
 predict_y = clf.predict(test_x)
-features = pd.DataFrame()
-print df_train.columns
-
-features['importance'] = clf.feature_importances_
-print(features)
 
 test_y2 = clf.predict(test_x1).astype(int)
 
